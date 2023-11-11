@@ -94,6 +94,7 @@ namespace sudo
             }
             catch (Exception e)
             {
+                // nothing we can do about it. If this does not work than we cannot communicate anything to the caller
             }
         }
 

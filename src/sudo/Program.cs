@@ -14,119 +14,115 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using sudo;
 
-namespace sudo
+static class Sudo
 {
-    static class Program
+    static int Main(string[] args)
     {
-        static int Main(string[] args)
+        var exe = args.FirstOrDefault();
+        var arguments = args.Skip(1).ToCmdArgs();
+
+        // -----------
+
+        if (!Pipes.IsChannelOpen($"sudo-host-out"))
         {
-            var exe = args.FirstOrDefault();
-            var arguments = args.Skip(1).ToCmdArgs();
+            Console.WriteLine("Starting new sudo-host...");
+            StartProcessHost();
+        }
+        else
+            Console.WriteLine("Reusing sudo-host...");
 
-            // -----------
+        var pid = Process.GetCurrentProcess().GetParentPid();
 
-            Process elevatedHost;
+        // -----------
 
-            if (!Pipes.IsChannelOpen($"sudo-host-out"))
-                StartProcessHost(0);
+        Task.Run(() =>
+            Pipes.ListenToChannel($"sudo-host-out", onData: WriteToConsoleOut));
 
-            var pid = Process.GetCurrentProcess().GetParentPid();
+        Task.Run(() =>
+            Pipes.ListenToChannel($"sudo-host-error", onData: WriteToConsoleError));
 
-            // -----------
+        int? exitCode = null;
+        Task.Run(() =>
+        {
+            var controlChannel = Pipes.CreateNotificationChannel($"sudo-host-control");
 
-            int? exitCode = null;
+            controlChannel.writeTo($"{exe}|{arguments}{Environment.NewLine}");
+            var ttt = controlChannel.readFrom();
+            exitCode = int.Parse("1");
+        });
 
-            Task.Run(() =>
-                Pipes.ListenToChannel($"sudo-host-out", onData: WriteToConsoleOut));
-
-            Task.Run(() =>
-                Pipes.ListenToChannel($"sudo-host-error", onData: WriteToConsoleError));
-
-            Task.Run(() =>
+        Task.Run(() =>
+        {
+            var (writeToHostInput, _) = Pipes.CreateNotificationChannel($"sudo-host-input");
+            while (true)
             {
-                var controlChannel = Pipes.CreateNotificationChannel($"sudo-host-control");
+                var line = Console.ReadLine();
+                writeToHostInput(line + Environment.NewLine);
+            }
+        });
 
-                controlChannel.writeTo($"{exe}|{arguments}{Environment.NewLine}");
-                var elevatedHostId = controlChannel.readFrom();
+        while (!exitCode.HasValue)
+            Thread.Sleep(300);
 
-                var process = Process.GetProcessById(int.Parse(elevatedHostId));
-                process.WaitForExit();
-                exitCode = process.ExitCode;
+        return exitCode.Value;
+    }
+
+    static void WriteToConsoleOut(char x)
+    {
+        lock (typeof(Console))
+        {
+            Console.Write(x);
+        }
+    }
+
+    static void WriteToConsoleError(char x)
+    {
+        lock (typeof(Console))
+        {
+            WithConsole(ConsoleColor.Red, () =>
+            {
+                var bytes = new[] { x }.GetBytes();
+                Console.OpenStandardError().Write(bytes, 0, bytes.Length);
             });
-
-            Task.Run(() =>
-            {
-                var (writeToHostInput, _) = Pipes.CreateNotificationChannel($"sudo-host-input");
-                while (true)
-                {
-                    var line = Console.ReadLine();
-                    writeToHostInput(line + Environment.NewLine);
-                }
-            });
-
-            while (exitCode == null)
-                Thread.Sleep(100);
-
-            return exitCode.Value;
         }
+    }
 
-        static void WriteToConsoleOut(char x)
+    static void WithConsole(ConsoleColor color, Action action)
+    {
+        var oldColor = Console.ForegroundColor;
+        try
         {
-            lock (typeof(Console))
-            {
-                Console.Write(x);
-            }
+            Console.ForegroundColor = color;
+            action();
         }
+        finally { Console.ForegroundColor = oldColor; }
+    }
 
-        static void WriteToConsoleError(char x)
-        {
-            lock (typeof(Console))
-            {
-                WithConsole(ConsoleColor.Red, () =>
-                {
-                    var bytes = new[] { x }.GetBytes();
-                    Console.OpenStandardError().Write(bytes, 0, bytes.Length);
-                });
-            }
-        }
+    static Process StartProcessHost()
+    {
+        var process = new Process();
 
-        static void WithConsole(ConsoleColor color, Action action)
-        {
-            var oldColor = Console.ForegroundColor;
-            try
-            {
-                Console.ForegroundColor = color;
-                action();
-            }
-            finally { Console.ForegroundColor = oldColor; }
-        }
+        process.StartInfo.FileName = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "sudo-host.exe");
+        process.StartInfo.UseShellExecute = true;
+        process.StartInfo.CreateNoWindow = true;
+        process.Start();
+        return process;
+    }
 
-        static Process StartProcessHost(int port)
-        {
-            var process = new Process();
+    static void OldApproachDoesNotElevateAnyMoreOnWin11()
+    {
+        Process p = new Process();
+        p.StartInfo.UseShellExecute = false;
+        p.StartInfo.FileName = @"choco";
+        p.StartInfo.Verb = "runas";
+        p.StartInfo.Arguments = "--version";
+        p.StartInfo.RedirectStandardInput = true;
+        p.StartInfo.RedirectStandardOutput = true;
+        p.Start();
 
-            process.StartInfo.FileName = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "sudo-host.exe");
-            process.StartInfo.Arguments = $"{Process.GetCurrentProcess().Id} {port}";
-            process.StartInfo.UseShellExecute = true;
-            process.StartInfo.CreateNoWindow = true;
-            process.Start();
-            return process;
-        }
-
-        static void OldApproachDoesNotElevateAnyMoreOnWin11()
-        {
-            Process p = new Process();
-            p.StartInfo.UseShellExecute = false;
-            p.StartInfo.FileName = @"choco";
-            p.StartInfo.Verb = "runas";
-            p.StartInfo.Arguments = "--version";
-            p.StartInfo.RedirectStandardInput = true;
-            p.StartInfo.RedirectStandardOutput = true;
-            p.Start();
-
-            Console.WriteLine(p.StandardOutput.ReadLine());
-            p.WaitForExit();
-        }
+        Console.WriteLine(p.StandardOutput.ReadLine());
+        p.WaitForExit();
     }
 }

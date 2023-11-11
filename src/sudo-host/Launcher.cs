@@ -6,6 +6,7 @@ using System.Diagnostics;
 using static System.Environment;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
@@ -14,35 +15,21 @@ using sudo;
 
 class Launcher
 {
-    public static Process process = new Process();
-    public static Action<string> onOutput;
-    public static Action<string> onError;
+    public static Process Process = new Process();
+    static Action<string> onOutput;
+    static Action<string> onError;
+    public static ManualResetEvent ProcessStartedEvent = new ManualResetEvent(false);
+    public static ManualResetEvent ProcessExitedEvent = new ManualResetEvent(false);
+    static ManualResetEvent stdOutReady = new ManualResetEvent(false);
+    static ManualResetEvent stdErrorReady = new ManualResetEvent(false);
 
-    static void ReportError(string message)
-    {
-        onError?.Invoke(message);
-    }
+    public static Action<string> OnOutput { get => onOutput; set { onOutput = value; stdOutReady.Set(); } }
+    public static Action<string> OnError { get => onError; set { onError = value; stdErrorReady.Set(); } }
 
-    public static string RunningProcessId()
-    {
-        var pid = 0;
+    public static void WaitForReady(int timeout) => WaitHandle.WaitAll(new WaitHandle[] { stdOutReady, stdErrorReady }, timeout);
 
-        while (pid == 0)
-        {
-            try
-            {
-                if (process != null)
-                {
-                    pid = process.Id;
-                    break;
-                }
-            }
-            catch { }
-
-            Thread.Sleep(50);
-        }
-        return pid.ToString();
-    }
+    public static void ReportError(string context, string message)
+        => OnError?.Invoke($"{context}: {message}{NewLine}");
 
     public static void HandleCommand(string command)
     {
@@ -53,9 +40,10 @@ class Launcher
                 var parts = command.Split(new[] { '|' }, 2);
                 Run(parts[0], parts[1]);
             }
-            catch (Exception ex) { Console.WriteLine(ex); } // lats line of defense;
-
-            onError($"$(exited:{process.ExitCode}){NewLine}");
+            catch (Exception e)
+            {
+                ReportError(nameof(HandleCommand), e.Message);
+            }
         });
     }
 
@@ -63,11 +51,11 @@ class Launcher
     {
         try
         {
-            process.StandardInput.Write(data);
+            Process.StandardInput.Write(data);
         }
-        catch (Exception ex)
+        catch (Exception e)
         {
-            ReportError(ex.Message + Environment.NewLine);
+            ReportError(nameof(HandleInput), e.Message);
         }
     }
 
@@ -77,17 +65,17 @@ class Launcher
     {
         try
         {
-            process.StartInfo.FileName = app;
-            process.StartInfo.Arguments = arguments;
+            Process.StartInfo.FileName = app;
+            Process.StartInfo.Arguments = arguments;
 
-            process.StartInfo.UseShellExecute = false;
-            process.StartInfo.RedirectStandardError = true;
-            process.StartInfo.RedirectStandardOutput = true;
-            process.StartInfo.RedirectStandardInput = true;
-            process.StartInfo.CreateNoWindow = true;
+            Process.StartInfo.UseShellExecute = false;
+            Process.StartInfo.RedirectStandardError = true;
+            Process.StartInfo.RedirectStandardOutput = true;
+            Process.StartInfo.RedirectStandardInput = true;
+            Process.StartInfo.CreateNoWindow = true;
             // process.StartInfo.UseShellExecute = true;
             // process.StartInfo.Verb = "runas";
-            process.Start();
+            Process.Start();
 
             Thread outputThread = new Thread(HandleOutput);
             outputThread.IsBackground = true;
@@ -97,10 +85,11 @@ class Launcher
             errorThread.IsBackground = true;
             errorThread.Start();
 
-            StartedProcessId = process.Id;
+            ProcessStartedEvent.Set();
 
-            process.WaitForExit();
-            Environment.ExitCode = process.ExitCode;
+            Process.WaitForExit();
+
+            ProcessExitedEvent.Set();
 
             outputThread.Join(1000);
 
@@ -108,9 +97,9 @@ class Launcher
             errorThread.Abort();
             outputThread.Abort();
         }
-        catch (Exception ex)
+        catch (Exception e)
         {
-            ReportError(ex.Message + Environment.NewLine);
+            ReportError(nameof(Run), e.Message);
         }
     }
 
@@ -120,19 +109,19 @@ class Launcher
         {
             var buffer = new char[255];
             int count = 0;
-            while (-1 != (count = process.StandardOutput.Read(buffer, 0, buffer.Length)))
+            while (-1 != (count = Process.StandardOutput.Read(buffer, 0, buffer.Length)))
             {
                 var bytes = buffer.GetBytes(count);
                 var data = bytes.GetString();
-                onOutput(data);
+                OnOutput(data);
 
-                if (process.StandardOutput.EndOfStream)
+                if (Process.StandardOutput.EndOfStream)
                     break;
             }
         }
-        catch (Exception ex)
+        catch (Exception e)
         {
-            Console.WriteLine(ex.ToString());
+            ReportError(nameof(HandleOutput), e.Message);
         }
     }
 
@@ -142,18 +131,18 @@ class Launcher
         {
             var chars = new char[255];
             int count = 0;
-            while (-1 != (count = process.StandardError.Read(chars, 0, chars.Length)))
+            while (-1 != (count = Process.StandardError.Read(chars, 0, chars.Length)))
             {
-                Encoding enc = process.StandardError.CurrentEncoding;
+                Encoding enc = Process.StandardError.CurrentEncoding;
                 var bytes = enc.GetBytes(chars, 0, count);
                 Console.OpenStandardError().Write(bytes, 0, bytes.Length);
-                if (process.StandardError.EndOfStream)
+                if (Process.StandardError.EndOfStream)
                     break;
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine(ex.ToString());
+            Console.WriteLine(ex.ToString()); // last line of defense
         }
     }
 }

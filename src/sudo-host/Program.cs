@@ -16,39 +16,44 @@ using sudo;
 
 static class SudoHost
 {
-    static void Main(string[] args)
+    static int Main(string[] args)
     {
+        int operationTimeout = 5000;
+
         try
         {
             int executingProcess = int.Parse(args[0]);
             int sudoProcess = int.Parse(args[1]);
 
             Task.Run(() =>
-                (Launcher.onOutput, _) = Pipes.CreateNotificationChannel($"sudo-host-out"));
+                Launcher.OnOutput = Pipes.CreateNotificationChannel($"sudo-host-out").writeTo);
 
             Task.Run(() =>
-                (Launcher.onError, _) = Pipes.CreateNotificationChannel($"sudo-host-error"));
+                Launcher.OnError = Pipes.CreateNotificationChannel($"sudo-host-error").writeTo);
 
-            while (Launcher.onOutput == null && Launcher.onError == null)
-                Thread.Sleep(50);
+            Launcher.WaitForReady(operationTimeout);
 
             Task.Run(() =>
                 Pipes.ListenAndRespondToChannel($"sudo-host-control",
                                                 onData: Launcher.HandleCommand,
-                                                respondWith: Launcher.RunningProcessId));
+                                                respondWith: () =>
+                                                {
+                                                    Launcher.ProcessStartedEvent.WaitOne(operationTimeout);
+                                                    Launcher.ProcessExitedEvent.WaitOne();
+                                                    return Launcher.Process.ExitCode.ToString();
+                                                }));
 
             Task.Run(() =>
                 Pipes.ListenToChannel($"sudo-host-input", Launcher.HandleInput));
 
-            while (Launcher.StartedProcessId == 0)
-            {
-                Thread.Sleep(100);
-            }
-            Launcher.process.WaitForExit();
+            Launcher.ProcessExitedEvent.WaitOne();
+
+            return Launcher.Process.ExitCode;
         }
         catch (Exception e)
         {
-            // may want to find the way to report/log in the future
+            Launcher.ReportError($"Sudo-host error", e.Message);
+            return -1;
         }
     }
 }

@@ -76,7 +76,7 @@
       <Link>Extensions.cs</Link>
     </Compile>
     <Compile Include="Launcher.cs" />
-    <Compile Include="GlobalSuppressions.cs" />
+    <Compile Include="Properties\GlobalSuppressions.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
