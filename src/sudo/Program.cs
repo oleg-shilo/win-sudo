@@ -1,15 +1,19 @@
 ﻿// Ignore Spelling: sudo
 
 using System;
+using System.Data.SqlClient;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Pipes;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Security.AccessControl;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 
 namespace sudo
 {
@@ -17,38 +21,72 @@ namespace sudo
     {
         static int Main(string[] args)
         {
-            if (!args.Any())
-            {
-                Console.WriteLine("Please specify the executable to run...");
-                return 1;
-            }
-            var stdOutPort = 5050;
-            var stdErrPort = stdOutPort + 1;
-            var stdInPort = stdOutPort + 2;
+            var exe = args.FirstOrDefault();
+            var arguments = args.Skip(1).ToCmdArgs();
 
-            var output = Console.OpenStandardOutput();
-            var error = Console.OpenStandardError();
+            // -----------
 
-            Task.Run(() => IpcServer.ListenTo(stdOutPort, (bytes, length) => output.Write(bytes, 0, length)));
-            Task.Run(() => IpcServer.ListenTo(stdErrPort, (bytes, length) => error.Write(bytes, 0, length)));
+            Process elevatedHost;
 
-            var process = StartProcessHost(stdOutPort);
-            var input = IpcClient.ConnectTo(stdInPort);
+            if (!Pipes.IsChannelOpen($"sudo-host-out"))
+                StartProcessHost(0);
 
-            input.WriteAllText($"$sudo-app:{args.FirstOrDefault()}|{args.Skip(1).ToCmdArgs()}");
+            var pid = Process.GetCurrentProcess().GetParentPid();
+
+            // -----------
 
             Task.Run(() =>
-                 {
-                     while (true)
-                     {
-                         var line = Console.ReadLine();
-                         input.WriteAllText(line);
-                     }
-                 });
+                Pipes.ListenToChannel($"sudo-host-out", onData: WriteToConsoleOut));
 
-            process.WaitForExit();
+            Task.Run(() =>
+                Pipes.ListenToChannel($"sudo-host-error", onData: WriteToConsoleError));
 
-            return process.ExitCode;
+            Task.Run(() =>
+            {
+                var controlChannel = Pipes.CreateNotificationChannel($"sudo-host-control");
+                controlChannel.writeToChannel($"{exe}|{arguments}{Environment.NewLine}");
+                // var elevatedHostId = controlChannel.readFromChannel();
+            });
+
+            var (writeToHostInput, _) = Pipes.CreateNotificationChannel($"sudo-host-input");
+            while (true)
+            {
+                var line = Console.ReadLine();
+                writeToHostInput(line + Environment.NewLine);
+            }
+
+            return 0;
+        }
+
+        static void WriteToConsoleOut(char x)
+        {
+            lock (typeof(Console))
+            {
+                Console.Write(x);
+            }
+        }
+
+        static void WriteToConsoleError(char x)
+        {
+            lock (typeof(Console))
+            {
+                WithConsole(ConsoleColor.Red, () =>
+                {
+                    var bytes = new[] { x }.GetBytes();
+                    Console.OpenStandardError().Write(bytes, 0, bytes.Length);
+                });
+            }
+        }
+
+        static void WithConsole(ConsoleColor color, Action action)
+        {
+            var oldColor = Console.ForegroundColor;
+            try
+            {
+                Console.ForegroundColor = color;
+                action();
+            }
+            finally { Console.ForegroundColor = oldColor; }
         }
 
         static Process StartProcessHost(int port)
@@ -63,7 +101,7 @@ namespace sudo
             return process;
         }
 
-        static void OldApproachDoesNBotElevateAnyMore()
+        static void OldApproachDoesNotElevateAnyMoreOnWin11()
         {
             Process p = new Process();
             p.StartInfo.UseShellExecute = false;
@@ -73,7 +111,6 @@ namespace sudo
             p.StartInfo.RedirectStandardInput = true;
             p.StartInfo.RedirectStandardOutput = true;
             p.Start();
-            // p.StandardInput.WriteLine("select vdisk 1");
 
             Console.WriteLine(p.StandardOutput.ReadLine());
             p.WaitForExit();

@@ -1,7 +1,9 @@
 // Ignore Spelling: app
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using static System.Environment;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
@@ -13,6 +15,40 @@ using sudo;
 class Launcher
 {
     public static Process process = new Process();
+    public static Action<string> onOutput;
+    public static Action<string> onError;
+
+    static void ReportError(string message)
+    {
+        onError?.Invoke(message);
+    }
+
+    public static void HandleCommand(string command)
+    {
+        Task.Run(() =>
+        {
+            try
+            {
+                var parts = command.Split(new[] { '|' }, 2);
+                Run(parts[0], parts[1]);
+            }
+            catch (Exception ex) { Console.WriteLine(ex); } // lats line of defense;
+
+            onError($"$(exited:{process.ExitCode}){NewLine}");
+        });
+    }
+
+    public static void HandleInput(char data)
+    {
+        try
+        {
+            process.StandardInput.Write(data);
+        }
+        catch (Exception ex)
+        {
+            ReportError(ex.Message + Environment.NewLine);
+        }
+    }
 
     public static void Run(string app, string arguments)
     {
@@ -49,7 +85,7 @@ class Launcher
         }
         catch (Exception ex)
         {
-            Program.appOutputSocket.WriteAllText(ex.Message + Environment.NewLine);
+            ReportError(ex.Message + Environment.NewLine);
         }
     }
 
@@ -61,15 +97,17 @@ class Launcher
             int count = 0;
             while (-1 != (count = process.StandardOutput.Read(buffer, 0, buffer.Length)))
             {
-                var bytes = Encoding.UTF8.GetBytes(buffer, 0, count);
-                Program.appOutputSocket.WriteAllBytes(bytes);
+                var bytes = buffer.GetBytes(count);
+                var data = bytes.GetString();
+                onOutput(data);
 
                 if (process.StandardOutput.EndOfStream)
                     break;
             }
         }
-        catch
+        catch (Exception ex)
         {
+            Console.WriteLine(ex.ToString());
         }
     }
 
@@ -88,8 +126,9 @@ class Launcher
                     break;
             }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            Console.WriteLine(ex.ToString());
         }
     }
 }

@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO.Pipes;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -26,7 +27,8 @@ namespace TestApp
             while (count < 7)
             {
                 count++;
-                Console.Write(count);
+                Console.Write($"{count}");
+                // Console.WriteLine(count);
                 Thread.Sleep(1000);
             }
             Console.WriteLine();
