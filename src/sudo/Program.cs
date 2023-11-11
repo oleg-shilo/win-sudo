@@ -35,6 +35,8 @@ namespace sudo
 
             // -----------
 
+            int? exitCode = null;
+
             Task.Run(() =>
                 Pipes.ListenToChannel($"sudo-host-out", onData: WriteToConsoleOut));
 
@@ -44,18 +46,29 @@ namespace sudo
             Task.Run(() =>
             {
                 var controlChannel = Pipes.CreateNotificationChannel($"sudo-host-control");
-                controlChannel.writeToChannel($"{exe}|{arguments}{Environment.NewLine}");
-                // var elevatedHostId = controlChannel.readFromChannel();
+
+                controlChannel.writeTo($"{exe}|{arguments}{Environment.NewLine}");
+                var elevatedHostId = controlChannel.readFrom();
+
+                var process = Process.GetProcessById(int.Parse(elevatedHostId));
+                process.WaitForExit();
+                exitCode = process.ExitCode;
             });
 
-            var (writeToHostInput, _) = Pipes.CreateNotificationChannel($"sudo-host-input");
-            while (true)
+            Task.Run(() =>
             {
-                var line = Console.ReadLine();
-                writeToHostInput(line + Environment.NewLine);
-            }
+                var (writeToHostInput, _) = Pipes.CreateNotificationChannel($"sudo-host-input");
+                while (true)
+                {
+                    var line = Console.ReadLine();
+                    writeToHostInput(line + Environment.NewLine);
+                }
+            });
 
-            return 0;
+            while (exitCode == null)
+                Thread.Sleep(100);
+
+            return exitCode.Value;
         }
 
         static void WriteToConsoleOut(char x)

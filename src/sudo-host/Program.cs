@@ -8,6 +8,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -34,63 +35,20 @@ static class SudoHost
             Task.Run(() =>
                 Pipes.ListenAndRespondToChannel($"sudo-host-control",
                                                 onData: Launcher.HandleCommand,
-                                                writeResponse: null));
+                                                respondWith: Launcher.RunningProcessId));
 
             Task.Run(() =>
                 Pipes.ListenToChannel($"sudo-host-input", Launcher.HandleInput));
 
-            while (true)
+            while (Launcher.StartedProcessId == 0)
             {
-                Thread.Sleep(1000);
+                Thread.Sleep(100);
             }
-            // $"333");
-            // $"{Launcher.process.Id}");
-
-            // execution.Wait();
+            Launcher.process.WaitForExit();
         }
         catch (Exception e)
         {
-            Console.WriteLine(e.ToString());
+            // may want to find the way to report/log in the future
         }
-        // Console.ReadLine();
-        // sudoProcess.WaitForProcessExit();
-        // try { Process.GetCurrentProcess().Kill(); } catch { }
-    }
-
-    static void OnCommand(string command)
-    {
-        var tokens = command.Split('|');
-
-        if (Launcher.process != null)
-            try { Launcher.process.Kill(); } catch { }
-
-        Task.Run(() =>
-            Launcher.Run(tokens[0], tokens[1]));
-    }
-
-    static void OnUserInput(string data)
-    {
-        Launcher.process.StandardInput.WriteLine(data);
-    }
-
-    static void OnStdInput(byte[] bytes, int length)
-    {
-        var input = bytes.GetString();
-
-        if (input.StartsWith("$sudo-app:"))
-        {
-            var tokens = input.Replace("$sudo-app:", "").Split('|');
-
-            if (Launcher.process != null)
-                try { Launcher.process.Kill(); } catch { }
-
-            Task.Run(() =>
-            {
-                Launcher.Run(tokens[0], tokens[1]);
-                Process.GetCurrentProcess().Kill();
-            });
-        }
-        else
-            Launcher.process.StandardInput.WriteLine(bytes.GetString());
     }
 }

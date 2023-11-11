@@ -23,6 +23,27 @@ class Launcher
         onError?.Invoke(message);
     }
 
+    public static string RunningProcessId()
+    {
+        var pid = 0;
+
+        while (pid == 0)
+        {
+            try
+            {
+                if (process != null)
+                {
+                    pid = process.Id;
+                    break;
+                }
+            }
+            catch { }
+
+            Thread.Sleep(50);
+        }
+        return pid.ToString();
+    }
+
     public static void HandleCommand(string command)
     {
         Task.Run(() =>
@@ -50,6 +71,8 @@ class Launcher
         }
     }
 
+    public static int StartedProcessId = 0;
+
     public static void Run(string app, string arguments)
     {
         try
@@ -73,6 +96,8 @@ class Launcher
             Thread errorThread = new Thread(HandleErrors);
             errorThread.IsBackground = true;
             errorThread.Start();
+
+            StartedProcessId = process.Id;
 
             process.WaitForExit();
             Environment.ExitCode = process.ExitCode;

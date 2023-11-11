@@ -66,7 +66,7 @@ namespace sudo
         /// </summary>
         /// <param name="name">The name.</param>
         /// <param name="onData">The on data.</param>
-        public static void ListenAndRespondToChannel(string name, Action<string> onData, Func<string> writeResponse = null)
+        public static void ListenAndRespondToChannel(string name, Action<string> onData, Func<string> respondWith = null)
         {
             try
             {
@@ -85,9 +85,9 @@ namespace sudo
                             if (line.HasText())
                                 onData(line);
 
-                            if (writeResponse != null)
+                            if (respondWith != null)
                                 using (var writer = new StreamWriter(pipeClient))
-                                    writer.WriteLine(writeResponse());
+                                    writer.WriteLine(respondWith());
                         }
                     }
                 }
@@ -102,7 +102,7 @@ namespace sudo
         /// </summary>
         /// <param name="name">The name.</param>
         /// <returns></returns>
-        public static (Action<string> writeToChannel, Func<string> readFromChannel) CreateNotificationChannel(string name)
+        public static (Action<string> writeTo, Func<string> readFrom) CreateNotificationChannel(string name)
         {
             var ps = new PipeSecurity();
             ps.AddAccessRule(new PipeAccessRule(Environment.UserName, PipeAccessRights.ReadWrite, AccessControlType.Allow));
@@ -116,14 +116,14 @@ namespace sudo
                         pipeServer.Write(bytes, 0, bytes.Length);
                         pipeServer.WaitForPipeDrain();
                     }
-                    , null
-                   // () =>
-                   // {
-                   //     // using (var reader = new StreamReader(pipeServer))
-                   //     // {
-                   //     //     return reader.ReadLine();
-                   //     // }
-                   // }
+                    ,
+                    () =>
+                    {
+                        using (var reader = new StreamReader(pipeServer))
+                        {
+                            return reader.ReadLine();
+                        }
+                    }
                    );
         }
     }
