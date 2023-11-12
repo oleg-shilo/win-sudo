@@ -24,15 +24,22 @@ namespace sudo
     {
         public static bool IsChannelOpen(string name)
         {
-            using (var pipeClient = new NamedPipeClientStream(".", name, PipeDirection.InOut))
-            {
-                try
-                {
-                    pipeClient.Connect(10);
-                    return pipeClient.IsConnected;
-                }
-                catch { return false; }
-            }
+            var mutex = new Mutex(false, name);
+            if (!mutex.WaitOne(0))
+                return true;
+            else
+                return false;
+
+            // using (var pipeClient = new NamedPipeClientStream(".", name, PipeDirection.InOut))
+            // {
+            //     try
+            //     {
+            //         pipeClient.Connect(10);
+            //         pipeClient.Close();
+            //         return true;
+            //     }
+            //     catch { return false; }
+            // }
         }
 
         /// <summary>
@@ -322,6 +329,9 @@ namespace sudo
         }
 
         public static bool HasText(this string text) => !string.IsNullOrEmpty(text);
+
+        public static string ArgValue(this string[] args, string name)
+            => args.FirstOrDefault(x => x.StartsWith($"-{name}:"))?.Split(new[] { ':' }, 2).LastOrDefault();
 
         public static void WaitForProcessExit(this int pid)
         {

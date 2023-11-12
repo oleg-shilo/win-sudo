@@ -14,6 +14,7 @@ namespace TestApp
     {
         static int Main(string[] args)
         {
+            Console.WriteLine("Done..."); return 0;
             Task.Run(() =>
             {
                 while (true)
@@ -24,7 +25,7 @@ namespace TestApp
             });
 
             int count = 0;
-            while (count < 7)
+            while (count < 3)
             {
                 count++;
                 Console.Write($"{count}");

@@ -1,72 +1,93 @@
 ﻿// Ignore Spelling: sudo
 
 using System;
-using System.Data.SqlClient;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
 using System.Linq;
-using System.Net;
-using System.Net.Sockets;
 using System.Reflection;
-using System.Security.AccessControl;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using sudo;
 
+// TODO:
+// + support two modes (single-run vs multi-run)
+// - in single-run use GUID for naming channels
+// - in sudo-host monitor
+//   - sudo and exit (if in a single-run mode) if it's terminated
+// - on the first run open url with readme file
+// - implement logging to the file
+// - implement CLI runtime help
+//   - clean
+//   - config:run=multi
+//   - config:run=single
+//   - config:idle_timeout=3
+// - implement CLI clean sudo-host instances
+// - implement settings file
+// - implement timeout for multi-run mode
+// - root process and exit if it's terminated
+// - Embed sudo-host as a resource, and distribute on a first run
+// - Documentation
 static class Sudo
 {
     static int Main(string[] args)
     {
-        var exe = args.FirstOrDefault();
-        var arguments = args.Skip(1).ToCmdArgs();
-
-        // -----------
-
-        if (!Pipes.IsChannelOpen($"sudo-host-out"))
+        try
         {
-            Console.WriteLine("Starting new sudo-host...");
-            StartProcessHost();
-        }
-        else
-            Console.WriteLine("Reusing sudo-host...");
+            var exe = args.FirstOrDefault();
+            var arguments = args.Skip(1).ToCmdArgs();
 
-        var pid = Process.GetCurrentProcess().GetParentPid();
+            // -----------
 
-        // -----------
-
-        Task.Run(() =>
-            Pipes.ListenToChannel($"sudo-host-out", onData: WriteToConsoleOut));
-
-        Task.Run(() =>
-            Pipes.ListenToChannel($"sudo-host-error", onData: WriteToConsoleError));
-
-        int? exitCode = null;
-        Task.Run(() =>
-        {
-            var controlChannel = Pipes.CreateNotificationChannel($"sudo-host-control");
-
-            controlChannel.writeTo($"{exe}|{arguments}{Environment.NewLine}");
-            var ttt = controlChannel.readFrom();
-            exitCode = int.Parse("1");
-        });
-
-        Task.Run(() =>
-        {
-            var (writeToHostInput, _) = Pipes.CreateNotificationChannel($"sudo-host-input");
-            while (true)
+            if (!Pipes.IsChannelOpen($"sudo-host-out"))
             {
-                var line = Console.ReadLine();
-                writeToHostInput(line + Environment.NewLine);
+                Console.WriteLine("Starting new sudo-host...");
+                StartProcessHost();
             }
-        });
+            else
+                Console.WriteLine("Reusing sudo-host...");
 
-        while (!exitCode.HasValue)
-            Thread.Sleep(300);
+            var pid = Process.GetCurrentProcess().GetParentPid();
 
-        return exitCode.Value;
+            // -----------
+
+            Task.Run(() =>
+                Pipes.ListenToChannel($"sudo-host-out", onData: WriteToConsoleOut));
+
+            Task.Run(() =>
+                Pipes.ListenToChannel($"sudo-host-error", onData: WriteToConsoleError));
+
+            int? exitCode = null;
+            Task.Run(() =>
+            {
+                var controlChannel = Pipes.CreateNotificationChannel($"sudo-host-control");
+
+                controlChannel.writeTo($"{exe}|{arguments}{Environment.NewLine}");
+                var reportedExitCode = controlChannel.readFrom();
+                exitCode = int.Parse(reportedExitCode);
+            });
+
+            Task.Run(() =>
+            {
+                var (writeToHostInput, _) = Pipes.CreateNotificationChannel($"sudo-host-input");
+                while (true)
+                {
+                    var line = Console.ReadLine();
+                    writeToHostInput(line + Environment.NewLine);
+                }
+            });
+
+            while (!exitCode.HasValue)
+                Thread.Sleep(300);
+
+            return exitCode.Value;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+            return -1;
+        }
     }
 
     static void WriteToConsoleOut(char x)
@@ -105,24 +126,10 @@ static class Sudo
         var process = new Process();
 
         process.StartInfo.FileName = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "sudo-host.exe");
+        // process.StartInfo.Arguments = "-run:multi";
         process.StartInfo.UseShellExecute = true;
         process.StartInfo.CreateNoWindow = true;
         process.Start();
         return process;
-    }
-
-    static void OldApproachDoesNotElevateAnyMoreOnWin11()
-    {
-        Process p = new Process();
-        p.StartInfo.UseShellExecute = false;
-        p.StartInfo.FileName = @"choco";
-        p.StartInfo.Verb = "runas";
-        p.StartInfo.Arguments = "--version";
-        p.StartInfo.RedirectStandardInput = true;
-        p.StartInfo.RedirectStandardOutput = true;
-        p.Start();
-
-        Console.WriteLine(p.StandardOutput.ReadLine());
-        p.WaitForExit();
     }
 }
