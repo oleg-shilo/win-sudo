@@ -5,14 +5,12 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using sudo;
 
 // TODO:
-// - on the first run open url with readme file
-// - implement logging to the file
-// - Embed sudo-host as a resource, and distribute on a first run
 // - Documentation
 static class Sudo
 {
@@ -140,6 +138,8 @@ static class Sudo
             config.Save();
 
             config = Config.Load();
+            Console.WriteLine($"{(command != null ? "Updated" : "Current")} configuration:");
+            Console.WriteLine("----------------------");
             Console.WriteLine(config.Serialize(userFriendly: true));
         }
         else if (args.ArgPresent("log"))
@@ -167,7 +167,7 @@ Commands:
 -config
     Prints the current configuration.
 
- -config:run:<single|multi>
+ -config:run=<single|multi>
     Sets run mode to
       single - displays UAC prompt for every execution
       multi  - displays UAC prompt only once for the terminal/shell session.
@@ -175,15 +175,34 @@ Commands:
     At the end prints the current configuration.
     Default value is 'single'.
 
- -config:idle-timeout:<minutes>
+ -config:idle-timeout=<minutes>
     Sets new value for the terminal session idle timeout. Only applicable for `multi` run mode.
     Default is 5 minutes.
 
 -log
     Prints location of log file(s).");
         }
+        else if (!File.Exists(Config.ConfigFile)) // first run on this OS/user-profile
+        {
+            Console.WriteLine(@"This is the first run of 'sudo'.
+You can use it to elevate any process from terminal/command-prompt:
+
+  sudo choco install <product>
+
+By default it dosplays UAC prompt every time you execute it.
+If you prefer Linux user experience when sudo prompts only the first time it runs, you can achieve this by changing the configuration:
+
+  sudo -config:run=multi
+
+CLI documentation: sudo -?
+Project documentation: https://github.com/oleg-shilo/win-sudo");
+
+            Config.Load(); // to ensure the config file is created
+        }
         else
+        {
             return false;
+        }
 
         return true;
     }

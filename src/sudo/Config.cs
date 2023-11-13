@@ -21,7 +21,7 @@ class Config
         File.WriteAllText(ConfigFile, Serialize());
     }
 
-    static string ConfigFile => Path.Combine(GetFolderPath(SpecialFolder.ApplicationData), "win-sudo", "app.settings");
+    public static string ConfigFile => Path.Combine(GetFolderPath(SpecialFolder.ApplicationData), "win-sudo", "app.settings");
 
     public static Config Load()
     {
