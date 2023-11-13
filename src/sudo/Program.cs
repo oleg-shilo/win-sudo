@@ -10,8 +10,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using sudo;
 
-// TODO:
-// - Documentation
 static class Sudo
 {
     static int Main(string[] args)
@@ -185,11 +183,11 @@ Commands:
         else if (!File.Exists(Config.ConfigFile)) // first run on this OS/user-profile
         {
             Console.WriteLine(@"This is the first run of 'sudo'.
-You can use it to elevate any process from terminal/command-prompt:
+You can use it to elevate any process from the Windows terminal/command-prompt:
 
   sudo choco install <product>
 
-By default it dosplays UAC prompt every time you execute it.
+By default it displays UAC prompt every time you execute it.
 If you prefer Linux user experience when sudo prompts only the first time it runs, you can achieve this by changing the configuration:
 
   sudo -config:run=multi
