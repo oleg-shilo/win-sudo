@@ -22,16 +22,14 @@ class SudoHost : MarshalByRefObject
 {
     static void Main(string[] args)
     {
-        if (args.ArgValue("run") == "multi")
-        {
-            string oldSudoHostId = args.ArgValue("wait");
-            if (oldSudoHostId.HasText())
-                try
-                {
-                    Process.GetProcessById(int.Parse(oldSudoHostId)).WaitForExit();
-                }
-                catch { }
-        }
+        string oldSudoHostId = args.ArgValue("wait");
+        if (oldSudoHostId.HasText())
+            try
+            {
+                // Debug.Assert(false);
+                Process.GetProcessById(int.Parse(oldSudoHostId)).WaitForExit();
+            }
+            catch { }
 
         Run(args);
     }
@@ -42,6 +40,8 @@ class SudoHost : MarshalByRefObject
         Mutex mutex = null;
         try
         {
+            var config = Config.Load();
+
             // int executingProcess = int.Parse(args[0]);
             // int sudoProcess = int.Parse(args[1]);
 
@@ -54,25 +54,28 @@ class SudoHost : MarshalByRefObject
             Task.Run(() =>
                 Launcher.OnError = Pipes.CreateNotificationChannel($"sudo-host-error").writeTo);
 
-            Launcher.WaitForReady(operationTimeout * 100);
+            var waitTillReadyTimeout = (config.multi_run ? 30 * 1000 : operationTimeout);
 
-            Task.Run(() =>
-                Pipes.ListenAndRespondToChannel($"sudo-host-control",
-                                                onData: Launcher.HandleCommand,
-                                                respondWith: () =>
-                                                {
-                                                    Launcher.ProcessStartedEvent.WaitOne(operationTimeout);
-                                                    Launcher.ProcessExitedEvent.WaitOne();
-                                                    return Launcher.Process.ExitCode.ToString();
-                                                }));
+            if (Launcher.WaitForReady(waitTillReadyTimeout))
+            {
+                Task.Run(() =>
+                    Pipes.ListenAndRespondToChannel($"sudo-host-control",
+                                                    onData: Launcher.HandleCommand,
+                                                    respondWith: () =>
+                                                    {
+                                                        Launcher.ProcessStartedEvent.WaitOne(operationTimeout);
+                                                        Launcher.ProcessExitedEvent.WaitOne();
+                                                        return Launcher.Process.ExitCode.ToString();
+                                                    }));
 
-            Task.Run(() =>
-                Pipes.ListenToChannel($"sudo-host-input", Launcher.HandleInput));
+                Task.Run(() =>
+                    Pipes.ListenToChannel($"sudo-host-input", Launcher.HandleInput));
 
-            Launcher.ProcessExitedEvent.WaitOne();
+                Launcher.ProcessExitedEvent.WaitOne();
 
-            if (args.ArgValue("run") == "multi")
-                Restart();
+                if (config.multi_run)
+                    Restart();
+            }
         }
         catch (Exception e)
         {
@@ -96,7 +99,7 @@ class SudoHost : MarshalByRefObject
         var process = new Process();
 
         process.StartInfo.FileName = Assembly.GetExecutingAssembly().Location;
-        process.StartInfo.Arguments = $"-run:multi -wait:{Process.GetCurrentProcess().Id}";
+        process.StartInfo.Arguments = $"-wait:{Process.GetCurrentProcess().Id}";
         process.StartInfo.UseShellExecute = true;
         process.StartInfo.CreateNoWindow = true;
         process.Start();

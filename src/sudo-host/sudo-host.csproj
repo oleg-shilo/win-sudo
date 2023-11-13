@@ -72,6 +72,9 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="..\sudo\Config.cs">
+      <Link>Config.cs</Link>
+    </Compile>
     <Compile Include="..\sudo\Extensions.cs">
       <Link>Extensions.cs</Link>
     </Compile>
