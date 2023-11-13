@@ -88,6 +88,7 @@ class SudoHost
         catch (Exception e)
         {
             Launcher.ReportError($"Sudo-host error", e.Message);
+            e.LogError();
         }
         finally
         {

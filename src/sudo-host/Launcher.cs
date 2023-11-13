@@ -1,13 +1,8 @@
 // Ignore Spelling: app
 
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using static System.Environment;
-using System.Net;
-using System.Net.Sockets;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -29,7 +24,10 @@ class Launcher
     public static bool WaitForReady(int timeout) => WaitHandle.WaitAll(new WaitHandle[] { stdOutReady, stdErrorReady }, timeout);
 
     public static void ReportError(string context, string message)
-        => OnError?.Invoke($"{context}: {message}{NewLine}");
+    {
+        $"{context}: {message}".LogError();
+        OnError?.Invoke($"{context}: {message}{NewLine}");
+    }
 
     public static void HandleCommand(string command)
     {

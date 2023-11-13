@@ -1,9 +1,8 @@
-// Ignore Spelling: sudo
-
 using System;
 using static System.Environment;
 using System.IO;
 using System.Linq;
+using sudo;
 
 class Config
 {
@@ -12,7 +11,6 @@ class Config
     public int IdleTimeoutInMilliseconds => idle_timeout * 60 * 1000;
 
     public string Serialize(bool userFriendly = false)
-
         => userFriendly ?
             $"run: {(multi_run ? "multi" : "single")}{NewLine}idle-timeout: {idle_timeout} minute(s)" :
             $"multi-run: {multi_run}{NewLine}idle-timeout: {idle_timeout}";
@@ -43,7 +41,7 @@ class Config
         catch
         {
             try { result.Save(); }
-            catch { }
+            catch (Exception e) { e.LogError(); }
         }
         return result;
     }

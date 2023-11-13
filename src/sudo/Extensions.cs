@@ -3,19 +3,15 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using static System.Environment;
 using System.IO;
 using System.IO.Pipes;
 using System.Linq;
-using System.Linq.Expressions;
-using System.Net;
-using System.Net.Sockets;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Runtime.Remoting.Messaging;
 using System.Security.AccessControl;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace sudo
 {
@@ -125,6 +121,29 @@ namespace sudo
                     }
                    );
         }
+    }
+
+    static class Logger
+    {
+        static int pid = Process.GetCurrentProcess().Id;
+
+        public static string LogFile
+            => Path.Combine(GetFolderPath(SpecialFolder.ApplicationData),
+                            "win-sudo",
+                            $"{Path.GetFileNameWithoutExtension(Assembly.GetExecutingAssembly().Location)}.last-run.log");
+
+        static Logger()
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(LogFile));
+            if (File.Exists(LogFile)) File.Delete(LogFile);
+            LogInfo("Started");
+        }
+
+        public static void LogInfo(this object message)
+            => File.AppendAllText(LogFile, $"{DateTime.Now.ToString("s")}|{pid}|INFO: {message}");
+
+        public static void LogError(this object message)
+            => File.AppendAllText(LogFile, $"{DateTime.Now.ToString("s")}|{pid}|ERROR: {message}");
     }
 
     static class GenericExtensions

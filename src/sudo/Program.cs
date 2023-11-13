@@ -2,19 +2,14 @@
 
 using System;
 using System.Diagnostics;
-using static System.Environment;
 using System.IO;
-using System.IO.Pipes;
 using System.Linq;
-using System.Net;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using sudo;
 
 // TODO:
-// + in single-run use GUID for naming channels
-// + in sudo-host monitor root process and exit if it's terminated
 // - on the first run open url with readme file
 // - implement logging to the file
 // - Embed sudo-host as a resource, and distribute on a first run
@@ -147,6 +142,10 @@ static class Sudo
             config = Config.Load();
             Console.WriteLine(config.Serialize(userFriendly: true));
         }
+        else if (args.ArgPresent("log"))
+        {
+            Console.WriteLine(Logger.LogFile);
+        }
         else if (args.ArgPresent("stop"))
         {
             foreach (var p in Process.GetProcessesByName("sudo-host").Where(p => p.Id != Process.GetCurrentProcess().Id))
@@ -164,7 +163,6 @@ Usage: sudo <process> [arguments]> | command
 Commands:
 -stop
     Terminates all currently active sudo sessions in all terminals. Only applicable for 'multi' run mode.
-Only
 
 -config
     Prints the current configuration.
@@ -179,7 +177,10 @@ Only
 
  -config:idle-timeout:<minutes>
     Sets new value for the terminal session idle timeout. Only applicable for `multi` run mode.
-    Default is 5 minutes.");
+    Default is 5 minutes.
+
+-log
+    Prints location of log file(s).");
         }
         else
             return false;
