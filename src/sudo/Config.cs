@@ -9,6 +9,7 @@ class Config
 {
     public bool multi_run = false;
     public int idle_timeout = 5;
+    public int IdleTimeoutInMilliseconds => idle_timeout * 60 * 1000;
 
     public string Serialize(bool userFriendly = false)
 

@@ -123,7 +123,7 @@ namespace sudo
                             return reader.ReadLine();
                         }
                     }
-            );
+                   );
         }
     }
 
@@ -148,7 +148,20 @@ namespace sudo
             public IntPtr InheritedFromUniqueProcessId;
         }
 
-        internal static int GetParentPid(this Process process)
+        public static Process GetParent(this Process process)
+        {
+            try
+            {
+                var pid = process.GetParentPid();
+                if (pid != 0)
+                    return Process.GetProcessById(pid);
+            }
+            catch { }
+
+            return null;
+        }
+
+        public static int GetParentPid(this Process process)
         {
             PROCESS_BASIC_INFORMATION pbi;
             var res = NtQueryInformationProcess(process.Handle, 0, out pbi, Marshal.SizeOf<PROCESS_BASIC_INFORMATION>(), out int size);
@@ -157,6 +170,8 @@ namespace sudo
         }
 
         public static bool HasText(this string text) => !string.IsNullOrEmpty(text);
+
+        public static int ToInt(this string text) => int.Parse(text);
 
         public static string ArgValue(this string[] args, string name)
             => args.FirstOrDefault(x => x.StartsWith($"-{name}:"))?.Split(new[] { ':' }, 2).LastOrDefault();

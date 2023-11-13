@@ -18,8 +18,10 @@ using System.Threading.Tasks;
 using System.Xml.Linq;
 using sudo;
 
-class SudoHost : MarshalByRefObject
+class SudoHost
 {
+    static Mutex mutex = null;
+
     static void Main(string[] args)
     {
         string oldSudoHostId = args.ArgValue("wait");
@@ -27,7 +29,7 @@ class SudoHost : MarshalByRefObject
             try
             {
                 // Debug.Assert(false);
-                Process.GetProcessById(int.Parse(oldSudoHostId)).WaitForExit();
+                Process.GetProcessById(oldSudoHostId.ToInt()).WaitForExit();
             }
             catch { }
 
@@ -37,29 +39,35 @@ class SudoHost : MarshalByRefObject
     static void Run(string[] args)
     {
         int operationTimeout = 5000;
-        Mutex mutex = null;
+
+        string channelId = args.ArgValue("channel");
+        int requesterPid = args.ArgValue("requester").ToInt(); // a terminal running sudo process
+
         try
         {
             var config = Config.Load();
 
-            // int executingProcess = int.Parse(args[0]);
-            // int sudoProcess = int.Parse(args[1]);
-
-            Task.Run(() =>
-                Launcher.OnOutput = Pipes.CreateNotificationChannel($"sudo-host-out").writeTo);
-
-            mutex = new Mutex(false, $"sudo-host-out");
+            mutex = new Mutex(false, channelId);
             mutex.WaitOne(0);
 
+            MonitorProcess(requesterPid, onExit: () =>
+                                         {
+                                             ReleaseMutex();
+                                             Process.GetCurrentProcess().Kill();
+                                         });
+
             Task.Run(() =>
-                Launcher.OnError = Pipes.CreateNotificationChannel($"sudo-host-error").writeTo);
+                Launcher.OnOutput = Pipes.CreateNotificationChannel($"{channelId}:sudo-host-out").writeTo);
 
-            var waitTillReadyTimeout = (config.multi_run ? 30 * 1000 : operationTimeout);
+            Task.Run(() =>
+                Launcher.OnError = Pipes.CreateNotificationChannel($"{channelId}:sudo-host-error").writeTo);
 
-            if (Launcher.WaitForReady(waitTillReadyTimeout))
+            var waitTillReadyTimeout = (config.multi_run ? config.IdleTimeoutInMilliseconds : operationTimeout);
+
+            if (Launcher.WaitForReady(waitTillReadyTimeout)) // sud is also ready. subscribed for all notification channels
             {
                 Task.Run(() =>
-                    Pipes.ListenAndRespondToChannel($"sudo-host-control",
+                    Pipes.ListenAndRespondToChannel($"{channelId}:sudo-host-control",
                                                     onData: Launcher.HandleCommand,
                                                     respondWith: () =>
                                                     {
@@ -69,12 +77,12 @@ class SudoHost : MarshalByRefObject
                                                     }));
 
                 Task.Run(() =>
-                    Pipes.ListenToChannel($"sudo-host-input", Launcher.HandleInput));
+                    Pipes.ListenToChannel($"{channelId}:sudo-host-input", Launcher.HandleInput));
 
                 Launcher.ProcessExitedEvent.WaitOne();
 
                 if (config.multi_run)
-                    Restart();
+                    Restart(channelId, requesterPid); // note channelId and requesterPid are not always the same (e.g. in run-single mode)
             }
         }
         catch (Exception e)
@@ -83,26 +91,39 @@ class SudoHost : MarshalByRefObject
         }
         finally
         {
-            try
-            {
-                mutex?.ReleaseMutex();
-                mutex?.Close();
-                mutex?.Dispose();
-                mutex = null;
-            }
-            catch { }
+            ReleaseMutex();
         }
     }
 
-    static Process Restart()
+    static void ReleaseMutex()
+    {
+        try
+        {
+            mutex?.ReleaseMutex();
+            mutex?.Dispose();
+        }
+        catch { }
+    }
+
+    static Process Restart(string channelId, int requester)
     {
         var process = new Process();
 
         process.StartInfo.FileName = Assembly.GetExecutingAssembly().Location;
-        process.StartInfo.Arguments = $"-wait:{Process.GetCurrentProcess().Id}";
+        process.StartInfo.Arguments = $"-channel:{channelId} -wait:{Process.GetCurrentProcess().Id} -requester:{requester}";
         process.StartInfo.UseShellExecute = true;
         process.StartInfo.CreateNoWindow = true;
         process.Start();
         return process;
+    }
+
+    static void MonitorProcess(int pid, Action onExit)
+    {
+        Task.Run(() =>
+        {
+            var terminal = Process.GetProcessById(pid);
+            terminal.WaitForExit();
+            onExit();
+        });
     }
 }

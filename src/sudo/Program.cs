@@ -13,22 +13,10 @@ using System.Threading.Tasks;
 using sudo;
 
 // TODO:
-// + support two modes (single-run vs multi-run)
-// - in single-run use GUID for naming channels
-// - in sudo-host monitor
-//   - sudo and exit (if in a single-run mode) if it's terminated
-//   - sudoParent and exit if it's terminated
+// + in single-run use GUID for naming channels
+// + in sudo-host monitor root process and exit if it's terminated
 // - on the first run open url with readme file
 // - implement logging to the file
-// + implement CLI runtime help
-//   + clean
-//   + config:run=multi
-//   + config:run=single
-//   + config:idle_timeout=3
-// + implement CLI clean sudo-host instances
-// + implement settings file
-// + implement timeout for multi-run mode
-// - root process and exit if it's terminated
 // - Embed sudo-host as a resource, and distribute on a first run
 // - Documentation
 static class Sudo
@@ -47,32 +35,33 @@ static class Sudo
 
             // -----------
 
-            if (!Pipes.IsChannelOpen($"sudo-host-out"))
-                StartProcessHost();
+            var parentPid = Process.GetCurrentProcess().GetParentPid();
+            var channelId = config.multi_run ? parentPid.ToString() : Guid.NewGuid().ToString();
 
-            var pid = Process.GetCurrentProcess().GetParentPid();
+            if (!Pipes.IsChannelOpen($"{channelId}"))
+                StartProcessHost(channelId, parentPid);
 
             // -----------
 
             Task.Run(() =>
-                Pipes.ListenToChannel($"sudo-host-out", onData: WriteToConsoleOut));
+                Pipes.ListenToChannel($"{channelId}:sudo-host-out", onData: WriteToConsoleOut));
 
             Task.Run(() =>
-                Pipes.ListenToChannel($"sudo-host-error", onData: WriteToConsoleError));
+                Pipes.ListenToChannel($"{channelId}:sudo-host-error", onData: WriteToConsoleError));
 
             int? exitCode = null;
             Task.Run(() =>
             {
-                var controlChannel = Pipes.CreateNotificationChannel($"sudo-host-control");
+                var controlChannel = Pipes.CreateNotificationChannel($"{channelId}:sudo-host-control");
 
                 controlChannel.writeTo($"{exe}|{arguments}{Environment.NewLine}");
                 var reportedExitCode = controlChannel.readFrom();
-                exitCode = int.Parse(reportedExitCode);
+                exitCode = reportedExitCode.ToInt();
             });
 
             Task.Run(() =>
             {
-                var (writeToHostInput, _) = Pipes.CreateNotificationChannel($"sudo-host-input");
+                var (writeToHostInput, _) = Pipes.CreateNotificationChannel($"{channelId}:sudo-host-input");
                 while (true)
                 {
                     var line = Console.ReadLine();
@@ -123,13 +112,14 @@ static class Sudo
         finally { Console.ForegroundColor = oldColor; }
     }
 
-    static Process StartProcessHost()
+    static Process StartProcessHost(string channelId, int requester)
     {
-        var config = Config.Load();
+        // note channelId and requester are not always the same (e.g. in run-single mode)
 
         var process = new Process();
 
         process.StartInfo.FileName = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "sudo-host.exe");
+        process.StartInfo.Arguments = $"-channel:{channelId} -requester:{requester}";
         process.StartInfo.UseShellExecute = true;
         process.StartInfo.CreateNoWindow = true;
         process.Start();
@@ -150,7 +140,7 @@ static class Sudo
                 else if (command == "run=single")
                     config.multi_run = false;
                 else if (command.StartsWith("idle-timeout="))
-                    config.idle_timeout = int.Parse(command.Split('=').LastOrDefault());
+                    config.idle_timeout = command.Split('=').LastOrDefault().ToInt();
 
             config.Save();
 

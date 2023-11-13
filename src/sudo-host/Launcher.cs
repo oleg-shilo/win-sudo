@@ -26,7 +26,7 @@ class Launcher
     public static Action<string> OnOutput { get => onOutput; set { onOutput = value; stdOutReady.Set(); } }
     public static Action<string> OnError { get => onError; set { onError = value; stdErrorReady.Set(); } }
 
-    public static void WaitForReady(int timeout) => WaitHandle.WaitAll(new WaitHandle[] { stdOutReady, stdErrorReady }, timeout);
+    public static bool WaitForReady(int timeout) => WaitHandle.WaitAll(new WaitHandle[] { stdOutReady, stdErrorReady }, timeout);
 
     public static void ReportError(string context, string message)
         => OnError?.Invoke($"{context}: {message}{NewLine}");
