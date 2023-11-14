@@ -8,6 +8,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Forms;
 using sudo;
 
 static class Sudo
@@ -119,6 +120,8 @@ static class Sudo
 
     static bool HandleCommands(string[] args)
     {
+        var header = $@"Widows equivalent of Linux 'sudo'. Version {Assembly.GetExecutingAssembly().GetName().Version}
+Copyright (C) 2023 Oleg Shilo. www.csscript.net (github.com/oleg-shilo/win-sudo)";
         if (args.ArgPresent("config"))
         {
             var config = Config.Load();
@@ -155,8 +158,11 @@ static class Sudo
         }
         else if (args.ArgPresent("help") || args.ArgPresent("?"))
         {
-            Console.WriteLine(@"Widows equivalent of Linux 'sudo'.
-Usage: sudo <process> [arguments]> | command
+            Console.WriteLine($@"{header}.
+Usage: sudo <executable> [arguments]> | command
+
+Note, before removing this app from the system ensure no its active instance is running in background.
+Use 'sudo -stop' command for that.
 
 Commands:
 -stop
@@ -180,12 +186,15 @@ Commands:
 -log
     Prints location of log file(s).");
         }
-        else if (!File.Exists(Config.ConfigFile)) // first run on this OS/user-profile
+        else if (!File.Exists(Config.ConfigFile) || !args.Any()) // first run on this OS/user-profile
         {
-            Console.WriteLine(@"This is the first run of 'sudo'.
-You can use it to elevate any process from the Windows terminal/command-prompt:
+            Console.WriteLine($@"{header}
+Use this utility to elevate any process from the Windows terminal/command-prompt:
 
-  sudo choco install <product>
+Usage:  sudo <executable> [arguments] | command
+
+Examples:  sudo choco install <product>
+           sudo -config
 
 By default, it displays UAC prompt every time you execute it.
 If you prefer a Linux user experience when sudo prompts only the first time it runs, you can achieve this by changing the configuration:

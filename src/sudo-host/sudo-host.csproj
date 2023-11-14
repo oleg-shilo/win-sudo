@@ -101,7 +101,6 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="css_logo.ico" />
-    <Content Include="css_logo.png" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

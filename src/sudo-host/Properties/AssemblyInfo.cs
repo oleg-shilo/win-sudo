@@ -4,12 +4,12 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("css")]
+[assembly: AssemblyTitle("sudo-host")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("css")]
-[assembly: AssemblyCopyright("Copyright © 2018-2021")]
+[assembly: AssemblyCompany("Oleg Shilo")]
+[assembly: AssemblyProduct("sudo")]
+[assembly: AssemblyCopyright("Copyright © Oleg Shilo 2023")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -19,7 +19,7 @@ using System.Runtime.InteropServices;
 [assembly: ComVisible(false)]
 
 // The following GUID is for the ID of the typelib if this project is exposed to COM
-[assembly: Guid("a8755b0e-ee1d-4cc0-9c58-a7abb0efae3c")]
+[assembly: Guid("a8755b0e-ee1d-4cc0-9258-a7abb0efae3c")]
 
 // Version information for an assembly consists of the following four values:
 //
@@ -31,5 +31,5 @@ using System.Runtime.InteropServices;
 // You can specify all the values or you can default the Build and Revision Numbers
 // by using the '*' as shown below:
 // [assembly: AssemblyVersion("1.0.*")]
-[assembly: AssemblyVersion("4.8.7.0")]
-[assembly: AssemblyFileVersion("4.8.7.0")]
+[assembly: AssemblyVersion("1.0.0.0")]
+[assembly: AssemblyFileVersion("1.0.0.0")]
