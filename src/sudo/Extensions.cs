@@ -75,9 +75,15 @@ namespace sudo
                         var running = true;
                         while (running)
                         {
-                            var line = reader.ReadLine();
-                            if (line.HasText())
-                                onData(line);
+                            string line;
+                            var allLines = new StringBuilder();
+                            while ((line = reader.ReadLine()).HasText())
+                            {
+                                allLines.AppendLine(line);
+                            }
+
+                            if (allLines.ToString().HasText())
+                                onData(allLines.ToString());
 
                             if (respondWith != null)
                                 using (var writer = new StreamWriter(pipeClient))
@@ -165,6 +171,15 @@ namespace sudo
             public IntPtr BasePriority;
             public IntPtr UniqueProcessId;
             public IntPtr InheritedFromUniqueProcessId;
+        }
+
+        public static bool IsRunning(this Process process)
+        {
+            try
+            {
+                return !process.HasExited;
+            }
+            catch { return false; }
         }
 
         public static Process GetParent(this Process process)

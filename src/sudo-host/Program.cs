@@ -72,6 +72,11 @@ class SudoHost
                                                     respondWith: () =>
                                                     {
                                                         Launcher.ProcessStartedEvent.WaitOne(operationTimeout);
+                                                        if (!Launcher.Process.IsRunning()) // failed to start; no need to wait
+                                                        {
+                                                            Launcher.ProcessExitedEvent.Set();
+                                                            return "-1";
+                                                        }
                                                         Launcher.ProcessExitedEvent.WaitOne();
                                                         return Launcher.Process.ExitCode.ToString();
                                                     }));

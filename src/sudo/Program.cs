@@ -2,19 +2,21 @@
 
 using System;
 using System.Diagnostics;
+using static System.Environment;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Forms;
 using sudo;
 
 static class Sudo
 {
     static int Main(string[] args)
     {
+        // Debug.Assert(false);
+
         if (HandleCommands(args))
             return 0;
 
@@ -46,7 +48,10 @@ static class Sudo
             {
                 var controlChannel = Pipes.CreateNotificationChannel($"{channelId}:sudo-host-control");
 
-                controlChannel.writeTo($"{exe}|{arguments}{Environment.NewLine}");
+                controlChannel.writeTo($"{exe}|{arguments}{NewLine}" +
+                                       $"{CurrentDirectory}{NewLine}" +
+                                       $"{NewLine}");
+
                 var reportedExitCode = controlChannel.readFrom();
                 exitCode = reportedExitCode.ToInt();
             });
@@ -122,54 +127,13 @@ static class Sudo
     {
         var header = $@"Widows equivalent of Linux 'sudo'. Version {Assembly.GetExecutingAssembly().GetName().Version}
 Copyright (C) 2023 Oleg Shilo. www.csscript.net (github.com/oleg-shilo/win-sudo)";
-        if (args.ArgPresent("config"))
-        {
-            var config = Config.Load();
 
-            var command = args.ArgValue("config");
-
-            if (command != null)
-                if (command == "run=multi")
-                    config.multi_run = true;
-                else if (command == "run=single")
-                    config.multi_run = false;
-                else if (command.StartsWith("idle-timeout="))
-                    config.idle_timeout = command.Split('=').LastOrDefault().ToInt();
-
-            config.Save();
-
-            config = Config.Load();
-            Console.WriteLine($"{(command != null ? "Updated" : "Current")} configuration:");
-            Console.WriteLine("----------------------");
-            Console.WriteLine(config.Serialize(userFriendly: true));
-        }
-        else if (args.ArgPresent("log"))
-        {
-            Console.WriteLine(Logger.LogFile);
-        }
-        else if (args.ArgPresent("stop"))
-        {
-            foreach (var p in Process.GetProcessesByName("sudo-host").Where(p => p.Id != Process.GetCurrentProcess().Id))
-                try
-                {
-                    p.Kill();
-                }
-                catch { }
-        }
-        else if (args.ArgPresent("help") || args.ArgPresent("?"))
-        {
-            Console.WriteLine($@"{header}.
-Usage: sudo <executable> [arguments]> | command
-
-Note, before removing this app from the system ensure no its active instance is running in background.
-Use 'sudo -stop' command for that.
-
-Commands:
--stop
-    Terminates all currently active sudo sessions in all terminals. Only applicable for 'multi' run mode.
-
+        var configCli = $@"
 -config
     Prints the current configuration.
+
+-config ?
+    Prints usage of config command.
 
  -config:run=<single|multi>
     Sets run mode to
@@ -181,7 +145,70 @@ Commands:
 
  -config:idle-timeout=<minutes>
     Sets new value for the terminal session idle timeout. Only applicable for `multi` run mode.
-    Default is 5 minutes.
+    Default is 5 minutes.";
+        if (args.ArgPresent("config"))
+        {
+            var config = Config.Load();
+
+            var command = args.ArgValue("config");
+            bool configUsage = (command == null && args.LastOrDefault() == "?");
+
+            if (configUsage)
+            {
+                Console.WriteLine($@"The command to manage 'sudo' configuration
+
+Usage: sudo config[:run=<single|multi>|:idle-timeout=<timeout>]
+
+Example: sudo -config:run=multi
+
+{configCli}");
+            }
+            else
+            {
+                if (command != null)
+                {
+                    if (command == "run=multi")
+                        config.multi_run = true;
+                    else if (command == "run=single")
+                        config.multi_run = false;
+                    else if (command.StartsWith("idle-timeout="))
+                        config.idle_timeout = command.Split('=').LastOrDefault().ToInt();
+
+                    config.Save();
+                }
+
+                config = Config.Load();
+                Console.WriteLine($"{(command != null ? "Updated" : "Current")} configuration:");
+                Console.WriteLine("----------------------");
+                Console.WriteLine(config.Serialize(userFriendly: true));
+            }
+        }
+        else if (args.ArgPresent("log"))
+        {
+            Console.WriteLine(Logger.LogFile);
+        }
+        else if (args.ArgPresent("stop") || args.ArgPresent("kill"))
+        {
+            var sudoInstances = Process.GetProcessesByName("sudo-host").Concat(Process.GetProcessesByName("sudo"));
+            foreach (var p in sudoInstances.Where(p => p.Id != Process.GetCurrentProcess().Id))
+                try
+                {
+                    p.Kill();
+                }
+                catch { }
+        }
+        else if (args.ArgPresent("help") || args.ArgPresent("?"))
+        {
+            Console.WriteLine($@"{header}.
+Usage: sudo <executable> [arguments]> | command [?]
+
+Note, before removing this app from the system ensure no its active instance is running in background.
+Use 'sudo -stop' command for that.
+
+Commands:
+-stop | -kill
+    Terminates all currently active sudo sessions in all terminals. Only applicable for 'multi' run mode.
+{configCli}
 
 -log
     Prints location of log file(s).");
@@ -196,7 +223,7 @@ Usage:  sudo <executable> [arguments] | command
 Examples:  sudo choco install <product>
            sudo -config
 
-By default, it displays UAC prompt every time you execute it.
+By default, it displays UAC prompt (for sudo-host process) every time you execute `sudo`.
 If you prefer a Linux user experience when sudo prompts only the first time it runs, you can achieve this by changing the configuration:
 
   sudo -config:run=multi
