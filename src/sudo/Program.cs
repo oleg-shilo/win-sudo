@@ -7,14 +7,25 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using sudo;
+using static sudo.GenericExtensions;
 
 static class Sudo
 {
     static int Main(string[] args)
     {
+        // var tt = GetEnvironmentVariables().Serialize();
+
+        // var ddd = tt.Split('\n', '\r').DeserializeEnVars();
+
+        // var p = new Process();
+
+        // foreach (var item in ddd.Keys)
+        //     p.StartInfo.EnvironmentVariables[item] = ddd[item];
+
         // Debug.Assert(false);
 
         if (HandleCommands(args))
@@ -50,6 +61,7 @@ static class Sudo
 
                 controlChannel.writeTo($"{exe}|{arguments}{NewLine}" +
                                        $"{CurrentDirectory}{NewLine}" +
+                                       $"{GetEnvironmentVariables().Serialize()}{NewLine}" +
                                        $"{NewLine}");
 
                 var reportedExitCode = controlChannel.readFrom();

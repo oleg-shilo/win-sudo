@@ -14,7 +14,9 @@ namespace TestApp
     {
         static int Main(string[] args)
         {
-            Console.WriteLine("%CD%: " + Environment.CurrentDirectory); return 0;
+            Console.WriteLine("%CD%: " + Environment.CurrentDirectory);
+            Console.WriteLine("%test%: " + Environment.GetEnvironmentVariable("test"));
+            return 0;
             Console.WriteLine("Done..."); return 0;
             Task.Run(() =>
             {

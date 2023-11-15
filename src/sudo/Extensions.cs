@@ -1,6 +1,7 @@
-// Ignore Spelling: sudo pid
+// Ignore Spelling: sudo pid envars
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using static System.Environment;
@@ -204,6 +205,17 @@ namespace sudo
         }
 
         public static bool HasText(this string text) => !string.IsNullOrEmpty(text);
+
+        public static string Serialize(this IDictionary currentEnvars)
+        {
+            var envars = string.Join(NewLine, currentEnvars.Keys.Cast<string>().Select(k => $"{k}|{currentEnvars[k]}"));
+            return envars;
+        }
+
+        public static Dictionary<string, string> DeserializeEnVars(this IEnumerable<string> envars)
+            => envars.Where(x => x.HasText())
+                     .Select(x => x.Split(new[] { '|' }, 2))
+                     .ToDictionary(x => x.FirstOrDefault(), x => x.LastOrDefault());
 
         public static int ToInt(this string text) => int.Parse(text);
 

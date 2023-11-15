@@ -1,6 +1,7 @@
 // Ignore Spelling: app
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using static System.Environment;
 using System.Linq;
@@ -40,10 +41,12 @@ class Launcher
                 var subCommands = command.Split('\n', '\r').Where(x => x.HasText()).ToArray();
 
                 var exe_and_args = subCommands[0];
-                var workingDir = subCommands[1];
-
                 var parts = exe_and_args.Split(new[] { '|' }, 2);
-                Run(parts[0], parts[1], workingDir);
+
+                var workingDir = subCommands[1];
+                var envars = subCommands.Skip(2).DeserializeEnVars();
+
+                Run(parts[0], parts[1], workingDir, envars);
             }
             catch (Exception e)
             {
@@ -66,7 +69,7 @@ class Launcher
 
     public static int StartedProcessId = 0;
 
-    public static void Run(string app, string arguments, string workingDir)
+    public static void Run(string app, string arguments, string workingDir, Dictionary<string, string> envars)
     {
         // Debug.Assert(false);
 
@@ -81,6 +84,10 @@ class Launcher
             Process.StartInfo.RedirectStandardOutput = true;
             Process.StartInfo.RedirectStandardInput = true;
             Process.StartInfo.CreateNoWindow = true;
+
+            foreach (var item in envars.Keys)
+                Process.StartInfo.EnvironmentVariables[item] = envars[item];
+
             // process.StartInfo.UseShellExecute = true;
             // process.StartInfo.Verb = "runas";
             Process.Start();
